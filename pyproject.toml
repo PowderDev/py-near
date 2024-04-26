@@ -30,7 +30,7 @@ description = "Pretty simple and fully asynchronous framework for working with N
 authors = [ {name = "pvolnov", email = "petr@herewallet.app"} ]
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
-dependencies=["base58", "aiohttp", "py-near-primitives", "pydantic", "loguru"]
+dependencies=["base58", "aiohttp", "py-near-primitives", "pydantic", "loguru", "pynacl"]
 keywords = ["python", "near", "async"]
 classifiers = [
     "Programming Language :: Python :: 3",
