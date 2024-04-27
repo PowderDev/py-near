@@ -59,22 +59,23 @@ class Account(object):
             private_keys = private_key
         elif isinstance(private_key, str):
             private_keys = [private_key]
-        elif isinstance(private_key, bytes):
-            private_keys = [private_key]
         else:
             return
 
         self._free_signers = asyncio.Queue()
         self._signers = []
         self._signer_by_pk: Dict[str, bytes] = {}
+        self.prev_set_pk = None
 
         for pk in private_keys:
-            if isinstance(pk, str):
-                try:
-                    pk = base58.b58decode(pk.replace("ed25519:", ""))
-                except UnicodeEncodeError:
-                    logger.error(f"Can't decode private key {pk[:10]}")
-                    continue
+            self.prev_set_pk = pk
+
+            try:
+                pk = base58.b58decode(pk.replace("ed25519:", ""))
+            except UnicodeEncodeError:
+                logger.error(f"Can't decode private key {pk[:10]}")
+                continue
+
             private_key = signing.SigningKey(pk[:32], encoder=encoding.RawEncoder)
             public_key = private_key.verify_key
 
@@ -90,6 +91,32 @@ class Account(object):
         self._lock = asyncio.Lock()
         self._lock_by_pk = collections.defaultdict(asyncio.Lock)
         self.chain_id = (await self._provider.get_status())["chain_id"]
+
+    def set_private_key(self, pk: str):
+        """
+        Clear and Update private keys for account
+        :param pk: private key to add
+        :return:
+        """
+        if self.prev_set_pk == pk:
+            return
+
+        try:
+            pk = base58.b58decode(pk.replace("ed25519:", ""))
+        except UnicodeEncodeError:
+            logger.error(f"Can't decode private key {pk[:10]}")
+            raise Exception(f"Can't decode private key {pk[:10]}")
+
+        self._signers = []
+        self._signer_by_pk = {}
+        self._free_signers = asyncio.Queue()
+
+        private_key = signing.SigningKey(pk[:32], encoder=encoding.RawEncoder)
+        public_key = private_key.verify_key
+
+        self._signer_by_pk[public_key] = pk
+        self._free_signers.put_nowait(pk)
+        self._signers.append(pk)
 
     async def _update_last_block_hash(self):
         """
@@ -232,6 +259,7 @@ class Account(object):
         return await self.sign_and_submit_tx(
             account_id, [transactions.create_transfer_action(amount)], nowait, included
         )
+
 
     async def function_call(
         self,
