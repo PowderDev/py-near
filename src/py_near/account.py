@@ -65,10 +65,10 @@ class Account(object):
         self._free_signers = asyncio.Queue()
         self._signers = []
         self._signer_by_pk: Dict[str, bytes] = {}
-        self.prev_set_pk = None
+        self._prev_set_pk = None
 
         for pk in private_keys:
-            self.prev_set_pk = pk
+            self._prev_set_pk = pk
 
             try:
                 pk = base58.b58decode(pk.replace("ed25519:", ""))
@@ -92,31 +92,32 @@ class Account(object):
         self._lock_by_pk = collections.defaultdict(asyncio.Lock)
         self.chain_id = (await self._provider.get_status())["chain_id"]
 
-    def set_private_key(self, pk: str):
+    def set_private_key(self, private_key: str):
         """
         Clear and Update private keys for account
-        :param pk: private key to add
+        :param private_key: private key to add
         :return:
         """
-        if self.prev_set_pk == pk:
+        if self._prev_set_pk == private_key:
             return
 
         try:
-            pk = base58.b58decode(pk.replace("ed25519:", ""))
+            pk = base58.b58decode(private_key.replace("ed25519:", ""))
         except UnicodeEncodeError:
-            logger.error(f"Can't decode private key {pk[:10]}")
-            raise Exception(f"Can't decode private key {pk[:10]}")
+            logger.error(f"Can't decode private key {private_key[:10]}")
+            raise Exception(f"Can't decode private key {private_key[:10]}")
 
         self._signers = []
         self._signer_by_pk = {}
         self._free_signers = asyncio.Queue()
 
-        private_key = signing.SigningKey(pk[:32], encoder=encoding.RawEncoder)
-        public_key = private_key.verify_key
+        sk = signing.SigningKey(pk[:32], encoder=encoding.RawEncoder)
+        public_key = sk.verify_key
 
         self._signer_by_pk[public_key] = pk
         self._free_signers.put_nowait(pk)
         self._signers.append(pk)
+        self._prev_set_pk = private_key
 
     async def _update_last_block_hash(self):
         """
